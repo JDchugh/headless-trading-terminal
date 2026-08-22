@@ -1,14 +1,14 @@
 class DataManager:
     def __init__(self):
-        self.current_candle = None
-        self.last_seen_price = None
+        self.current_candles = {}
+        self.last_seen_prices = {}
 
-    def process_ltp(self, ltp):
-        self.last_seen_price = ltp
+    def process_ltp(self, symbol, ltp):
+        self.last_seen_prices[symbol] = ltp
 
-        if self.current_candle is None:
+        if symbol not in self.current_candles:
             # Start a new candle
-            self.current_candle = {
+            self.current_candles[symbol] = {
                 "open": ltp,
                 "high": ltp,
                 "low": ltp,
@@ -16,29 +16,29 @@ class DataManager:
             }
         else:
             # Update existing candle
-            self.current_candle["high"] = max(self.current_candle["high"], ltp)
-            self.current_candle["low"] = min(self.current_candle["low"], ltp)
-            self.current_candle["close"] = ltp
+            candle = self.current_candles[symbol]
+            candle["high"] = max(candle["high"], ltp)
+            candle["low"] = min(candle["low"], ltp)
+            candle["close"] = ltp
 
-    def close_candle(self, timestamp):
-        if self.current_candle is not None:
-            # We had ticks in this minute
-            completed_candle = self.current_candle
-        elif self.last_seen_price is not None:
-            # No ticks in this minute, but we have a previous price (Forward Fill)
-            completed_candle = {
-                "open": self.last_seen_price,
-                "high": self.last_seen_price,
-                "low": self.last_seen_price,
-                "close": self.last_seen_price
-            }
-        else:
-            # Edge case: No ticks ever received yet (app just started)
-            return None
-
-        # Add the timestamp to the completed candle
-        completed_candle["timestamp"] = timestamp
-
-        # Reset current candle for the next minute
-        self.current_candle = None
-        return completed_candle
+    def close_candles(self, timestamp):
+        completed_candles = []
+        for symbol, last_price in self.last_seen_prices.items():
+            if symbol in self.current_candles:
+                # We had ticks in this minute
+                candle = self.current_candles.pop(symbol)
+            else:
+                # No ticks in this minute, but we have a previous price (Forward Fill)
+                candle = {
+                    "open": last_price,
+                    "high": last_price,
+                    "low": last_price,
+                    "close": last_price
+                }
+            
+            # Add metadata to the completed candle
+            candle["timestamp"] = timestamp
+            candle["symbol"] = symbol
+            completed_candles.append(candle)
+            
+        return completed_candles

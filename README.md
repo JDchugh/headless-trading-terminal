@@ -1,21 +1,45 @@
-DataMAnager -> 
-object = owns a candle, last_seens_price as properties and process_ltp and close_candle as functions
-process_ltp(ltp) = takes ltp(from broker) and updates candle
-close_candle(timestamp) = takes timestamp and close the candle for the same timestemp and return it
+# Python Algorithmic Trading Engine
 
-Strategy ->
-object = owns short_ema and long_ema as properties and accept same as parameters. Has process_candle as function.
-process_candle(candle) = takes candle and return buy/sell signal if there is any
+An event-driven algorithmic trading engine built in Python.
 
-broker ->
-object = has client and ws as properties. connect, async stream_ticks, async close_stream, and place_order as functions/generators.
-connect() = connects the broker
-stream_ticks("nse_cm", "Nifty 50") = takes exchange and instrument and yields ltp of the instrument
-close_stream = closes the ws connection
-place_order(side, quantity) = takes side and quantity and places order on broker(right now just print only, not made it functional yet)
+This project implements a decoupled, asynchronous architecture to manage live market data streams, signal generation, and order execution. It includes a paper-trading simulator and a state-reconciliation system designed to handle unexpected disconnects or crashes.
 
+## Core Architecture
 
-utils ->
-is_candle_boundary(timestamp, time_frame) = takes timestamp and time_frame and return true if candle is boundary for that same timeframe. timeframe is in minutes
+The engine is built around `asyncio` to handle concurrent I/O operations without blocking the main thread.
 
-resample_to_timeframe(candle_list) = takes list of candles and return aggregated candle in form of dict(same format as candle)
+* **Asynchronous Workers:** The orchestrator (`main.py`) manages several concurrent queues:
+  * **Tick Streamer:** Consumes raw tick data from the broker websocket.
+  * **Timer Worker:** Enforces strict minute-boundaries for accurate OHLCV candle aggregation.
+  * **Strategy Engine:** Evaluates incoming candles against active strategies.
+  * **Execution Worker:** Handles asynchronous dispatch of market and limit orders.
+* **Pub/Sub Routing:** To efficiently handle multiple instruments, the engine builds a dynamic routing map (`strategy_symbol_map`). Incoming candles are routed in `O(1)` time only to the specific strategies subscribed to that symbol.
+* **Abstract Broker Interface:** Trading logic is decoupled from broker APIs via a `BaseBroker` interface (Dependency Injection). The system currently supports local simulation (`FakeBroker`) through a `UnifiedBroker` facade.
+
+## State Management & Recovery
+
+* **Position Reconciler:** On boot, the engine downloads the true order book from the broker, calculates the net position per strategy, and synchronizes the local state to match the broker's source of truth.
+* **In-Memory Cache:** `StateManager` uses an in-memory cache to serialize strategy state (EMAs, boundaries) to disk, preventing read-modify-write race conditions when multiple strategies trigger simultaneously.
+
+## Project Structure
+
+```
+├── main.py                # Async Orchestrator & Worker Definitions
+├── data_manager.py        # Multi-asset real-time candle aggregation
+├── strategy.py            # Signal generation logic (EMA Crossover)
+├── reconciler.py          # Boot-sequence position verification
+├── state_manager.py       # Thread-safe disk serialization for state
+└── brokers/
+    ├── base_broker.py     # Abstract Interface
+    ├── unified_broker.py  # Broker Facade / Router
+    ├── fake_broker.py     # Offline Paper Trading Simulator
+    └── kotak_broker.py    # Kotak Neo API Implementation
+```
+
+## Current Roadmap
+
+* **Base Strategy Interface:** Refactoring signal generation to enforce strict position guards and risk management at the interface level.
+* **P&L Tracking:** Implementing real-time realized and unrealized P&L calculation modules.
+* **Warmup Sequence:** Pre-fetching historical candles on boot to seed technical indicators before live streaming begins.
+* **Error & Failure Handling:** System is currently an MVP focused strictly on the happy path. Comprehensive error handling (network disconnects, order rejections, rate limits) is slated for the next development phase.
+* **Live Broker Integrations:** `KotakBroker` and `ICICIBroker` currently have their architectural interfaces wired up but require complete implementation before live deployment.
