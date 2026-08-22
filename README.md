@@ -27,6 +27,7 @@ The engine is built around `asyncio` to handle concurrent I/O operations without
 ├── main.py                # Async Orchestrator & Worker Definitions
 ├── data_manager.py        # Multi-asset real-time candle aggregation
 ├── strategy.py            # Signal generation logic (EMA Crossover)
+├── utils.py               # Candle boundary detection & multi-timeframe resampling
 ├── reconciler.py          # Boot-sequence position verification
 ├── state_manager.py       # Thread-safe disk serialization for state
 └── brokers/
